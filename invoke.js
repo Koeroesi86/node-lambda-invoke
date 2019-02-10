@@ -1,11 +1,9 @@
 const minimist = require('minimist');
 
 const {
-  event: eventString,
   lambda = './testLambda.js',
   handler = 'handler'
 } = minimist(process.argv.slice(2));
-const event = JSON.parse(eventString);
 
 /**
  * @typedef ResponseEvent
@@ -14,14 +12,18 @@ const event = JSON.parse(eventString);
  * @property {String} body
  */
 
-const invoke = () => {
-  const lambdaHandler = require(lambda)[handler];
-  lambdaHandler(event, {}, (error, response) => {
-    if (error) {
-      throw new Error(error);
-    }
-    console.log(`###RESPONSE###${JSON.stringify(response)}`);
-  })
-};
+process.on('message', message => {
+  console.log('message from parent:', message);
 
-invoke();
+  const lambdaHandler = require(lambda)[handler];
+  lambdaHandler(message, {}, (error, response) => {
+    if (error) {
+      return process.send({
+        statusCode: error.statusCode || 500,
+        body: error.body || error.toString()
+      });
+    }
+
+    process.send(response);
+  })
+});

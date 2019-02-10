@@ -1,7 +1,7 @@
 const http = require('http');
 const url = require('url');
 const { resolve } = require('path');
-const { spawn } = require('child_process');
+const { fork } = require('child_process');
 
 if (!process.env.HOST) {
   require('dotenv').config();
@@ -49,36 +49,40 @@ http
       const handlerKey = 'handler';
 
       console.log('Invoking lambda', `${lambdaToInvoke}#${handlerKey}`);
-      const lambdaInstance = spawn(
-        `node ${invoke}`,
+      const lambdaInstance = fork(
+        invoke,
         [
-          '--event', JSON.stringify(JSON.stringify(event)),
           '--lambda', lambdaToInvoke,
           '--handler', handlerKey
         ],
-        { shell: true }
+        {
+        }
       );
 
-      const killTimer = setTimeout(() => {
-        lambdaInstance.kill('SIGINT');
-      }, 15000); // setting to default AWS timeout
+      let killTimer;
+      const setKillTimer = () => {
+        killTimer = setTimeout(() => {
+          lambdaInstance.kill('SIGINT');
+        }, 15000);
+      }; // setting to default AWS timeout
 
-      lambdaInstance.stdout.on('data', (data) => {
-        const logLine = data.toString();
-        if (logLine.startsWith('###RESPONSE###')) {
-          /** @var {ResponseEvent} response */
-          const responseEvent = JSON.parse(logLine.replace(/^###RESPONSE###/, ''));
+      lambdaInstance.send(event);
+
+      setKillTimer();
+
+      /** @var {ResponseEvent} responseEvent */
+      lambdaInstance.on('message', responseEvent => {
+        if (responseEvent.statusCode) {
+          clearTimeout(killTimer);
           response.writeHead(responseEvent.statusCode, responseEvent.headers);
-          response.write(responseEvent.body);
+          if (responseEvent.body) response.write(responseEvent.body);
+
+          lambdaInstance.kill('SIGINT');
         }
       });
 
-      lambdaInstance.stderr.on('data', (data) => {
-        console.log(`stderr: ${data}`);
-      });
-
       lambdaInstance.on('close', (code) => {
-        if (code !== 0) {
+        if (code) {
           console.log(`child process exited with code ${code}`);
         }
         clearTimeout(killTimer);
