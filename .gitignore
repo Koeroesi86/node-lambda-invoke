@@ -2,3 +2,7 @@ node_modules
 .env
 *.log
 .idea
+!requests/.gitkeep
+requests/*
+!responses/.gitkeep
+responses/*
