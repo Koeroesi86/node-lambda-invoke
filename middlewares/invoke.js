@@ -15,20 +15,25 @@ setTimeout(() => {
 
 process.on('message', requestId => {
   if (requestId === EVENT_STARTUP) return;
+
   const storage = new Storage(requestId);
-  const message = storage.request;
 
-  lambdaHandler(message, {}, (error, response = {}) => {
-    const responseEvent = new ResponseEvent;
+  Promise.resolve()
+    .then(() => storage.getRequest())
+    .then(message => new Promise(resolve => {
+      lambdaHandler(message, {}, (error, response = {}) => {
+        const responseEvent = new ResponseEvent;
 
-    if (error) {
-      responseEvent.statusCode = 500;
-      responseEvent.body = error.body || error + '';
-    } else {
-      Object.assign(responseEvent, response);
-    }
+        if (error) {
+          responseEvent.statusCode = 500;
+          responseEvent.body = error.body || error + '';
+        } else {
+          Object.assign(responseEvent, response);
+        }
 
-    storage.response = responseEvent;
-    process.send(requestId);
-  });
+        resolve(responseEvent);
+      });
+    }))
+    .then(responseEvent => storage.setResponse(responseEvent))
+    .then(() => process.send(requestId));
 });

@@ -33,11 +33,11 @@ class Worker {
   }
 
   set onmessage(onmessage) {
-    this.instance.on('message', onmessage);
+    this.addEventListener('message', onmessage);
   }
 
   set onerror(onerror) {
-    this.instance.on('error', onerror);
+    this.addEventListener('error', onerror);
   }
 
   addEventListener(event, listener) {

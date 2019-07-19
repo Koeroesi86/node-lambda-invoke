@@ -48,18 +48,18 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
       });
     }
 
-    storage.request = event;
-
-    lambdaInstance.invoke(requestId, () => {
+    storage.setRequest(event)
+      .then(() => new Promise(res =>  lambdaInstance.invoke(requestId, res))
+      .then(() => storage.getResponse()))
       /** @var {ResponseEvent} responseEvent */
-      const responseEvent = storage.response;
-      storage.destroy();
-      if (responseEvent.statusCode) {
-        response.writeHead(responseEvent.statusCode, responseEvent.headers);
-        if (responseEvent.body) response.write(responseEvent.body);
-        response.end();
-      }
-    });
+      .then(responseEvent => {
+        storage.destroy();
+        if (responseEvent.statusCode) {
+          response.writeHead(responseEvent.statusCode, responseEvent.headers);
+          if (responseEvent.body) response.write(responseEvent.body);
+          response.end();
+        }
+      });
 
     lambdaInstance.addEventListenerOnce('close', () => {
       if (!response.finished) response.end();

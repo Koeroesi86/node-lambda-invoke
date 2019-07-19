@@ -1,10 +1,17 @@
-const { readFileSync, writeFileSync, unlinkSync, existsSync } = require('fs');
 const { resolve } = require('path');
 const serializer = require('./Serializer');
+const Driver = require('./FileDriver');
 
 class Storage {
-  constructor(id)  {
+  constructor(id, driver)  {
     this.id = id;
+    this.driver = driver || Driver;
+
+    this.setResponse = this.setResponse.bind(this);
+    this.getResponse = this.getResponse.bind(this);
+    this.setRequest = this.setRequest.bind(this);
+    this.getRequest = this.getRequest.bind(this);
+    this.destroy = this.destroy.bind(this);
   }
 
   get requestPath() {
@@ -15,25 +22,27 @@ class Storage {
     return resolve(__dirname, `../responses/${this.id}`);
   }
 
-  get request() {
-    return serializer.deserialize(readFileSync(this.requestPath, 'utf8'));
+  setResponse(response) {
+    return this.driver.save(this.responsePath, serializer.serialize(response));
   }
 
-  set request(request) {
-    writeFileSync(this.requestPath, serializer.serialize(request), 'utf8');
+  getResponse() {
+    return this.driver.restore(this.responsePath)
+      .then(data => Promise.resolve(serializer.deserialize(data)));
   }
 
-  get response() {
-    return serializer.deserialize(readFileSync(this.responsePath, 'utf8'));
+  setRequest(request) {
+    return this.driver.save(this.requestPath, serializer.serialize(request));
   }
 
-  set response(response) {
-    writeFileSync(this.responsePath, serializer.serialize(response), 'utf8');
+  getRequest() {
+    return this.driver.restore(this.requestPath)
+      .then(data => Promise.resolve(serializer.deserialize(data)));
   }
 
   destroy() {
-    if (existsSync(this.responsePath)) unlinkSync(this.responsePath);
-    if (existsSync(this.requestPath)) unlinkSync(this.requestPath);
+    this.driver.destroy(this.responsePath);
+    this.driver.destroy(this.requestPath);
   }
 }
 
