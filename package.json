@@ -1,14 +1,18 @@
 {
-  "name": "node-api-gateway",
+  "name": "@koeroesi86/node-lambda-invoke",
   "version": "1.0.0",
-  "description": "",
+  "description": "A local Lambda implementation",
   "main": "index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "nodemon example/example.js",
+    "generate-version": "node scripts/version.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "dotenv": "^6.2.0",
     "nodemon": "^1.18.10",

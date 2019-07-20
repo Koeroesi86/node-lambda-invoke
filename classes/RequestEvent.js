@@ -10,8 +10,6 @@
  * @property {Object.<String, String>} stageVariables
  */
 class RequestEvent {
-  constructor() {
-  }
 }
 
 module.exports = RequestEvent;

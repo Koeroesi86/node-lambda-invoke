@@ -19,10 +19,11 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
     } = url.parse(request.url, true);
 
     /** @var {RequestEvent} event */
-    const event = new RequestEvent();
+    const event = new RequestEvent;
     event.httpMethod = request.method.toUpperCase();
     event.path = path;
     event.queryStringParameters = queryStringParameters;
+    event.headers = request.headers;
 
     const requestId = uuid.v4();
     const storage = new Storage(requestId);
