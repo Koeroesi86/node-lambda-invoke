@@ -4,7 +4,7 @@ const rimraf = require('rimraf');
 const { resolve } = require('path');
 const Lambda = require('../classes/Lambda');
 const RequestEvent = require('../classes/RequestEvent');
-const Storage = require('../classes/Storage');
+const { EVENT_STARTED } = require('../constants');
 const stdoutListener = require('./stdoutListener');
 
 const lambdaInstances = {};
@@ -12,15 +12,17 @@ const lambdaInstances = {};
 /**
  * @param {string} lambdaToInvoke
  * @param {string} handlerKey
- * @param {function} [logger]
- * @param {Storage} [storageDriver]
+ * @param {function} logger
+ * @param {string} storageDriverPath
  * @returns {Function}
  */
-const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}, storageDriver) => {
+const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}, storageDriverPath) => {
   // TODO: tmp folders
+  if (!storageDriverPath || typeof storageDriverPath !== "string") return (req, res, next) => { next() };
+
   rimraf.sync(resolve(__dirname, '../requests/*'));
   rimraf.sync(resolve(__dirname, '../responses/*'));
-  const storageDriverClass = storageDriver || Storage;
+  const StorageDriver = require(storageDriverPath);
   return (request, response) => {
     const {
       query: queryStringParameters,
@@ -35,48 +37,66 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
     event.headers = request.headers;
 
     const requestId = uuid.v4();
-    const storage = new storageDriverClass(requestId);
+    const storage = new StorageDriver(requestId);
 
     let lambdaInstance;
-    let currentId = Object.keys(lambdaInstances).find(id => !lambdaInstances[id].busy);
 
     logger('Invoking lambda', `${lambdaToInvoke}#${handlerKey}`);
-    if (currentId) {
-      lambdaInstance = lambdaInstances[currentId];
-    } else {
-      currentId = uuid.v4();
-      lambdaInstance = new Lambda(lambdaToInvoke, handlerKey);
-      lambdaInstances[currentId] = lambdaInstance;
+    Promise.resolve()
+      .then(() => new Promise(res => {
+        let currentId = Object.keys(lambdaInstances).find(id => !lambdaInstances[id].busy);
 
-      lambdaInstance.addEventListenerOnce('close', code => {
-        if (code) logger(`[${currentId}] Lambda exited with code ${code}`);
-        if (!response.finished) response.end();
+        if (currentId) {
+          res({ id: currentId, instance: lambdaInstances[currentId] });
+        } else {
+          currentId = uuid.v4();
+          const currentLambdaInstance = new Lambda(lambdaToInvoke, handlerKey, logger, storageDriverPath);
 
-        lambdaInstances[currentId] = null;
-        delete lambdaInstances[currentId];
-        storage.destroy();
-      });
+          currentLambdaInstance.addEventListener('message', message => {
+            if (message.type === EVENT_STARTED) {
+              logger(`[${currentId}] started`);
+              res({ id: currentId, instance: currentLambdaInstance });
+            }
+          });
 
-      stdoutListener(lambdaInstance, logger);
-    }
+          currentLambdaInstance.addEventListenerOnce('close', code => {
+            if (code) logger(`[${currentId}] Lambda exited with code ${code}`);
+            if (!response.finished) response.end();
 
-    storage.setRequest(event)
+            lambdaInstances[currentId] = null;
+            delete lambdaInstances[currentId];
+            storage.destroy();
+          });
+
+          stdoutListener(currentLambdaInstance, logger);
+        }
+      }))
+      .then(({ id, instance }) => {
+        lambdaInstances[id] = instance;
+        lambdaInstance = instance;
+        return Promise.resolve();
+      })
+      .then(() => storage.setRequest(event))
       .then(() => new Promise(res =>  lambdaInstance.invoke(requestId, res))
       .then(() => storage.getResponse()))
       /** @var {ResponseEvent} responseEvent */
       .then(responseEvent => {
         if (responseEvent.statusCode) {
           response.writeHead(responseEvent.statusCode, responseEvent.headers);
-          if (responseEvent.body) response.write(responseEvent.body);
+          if (responseEvent.body) {
+            const bufferEncoding = responseEvent.isBase64Encoded ? 'base64' : 'utf8';
+            response.end(Buffer.from(responseEvent.body, bufferEncoding));
+          }
           response.end();
         }
         return storage.destroy();
+      })
+      .catch(err => {
+        logger(err);
+        response.writeHead(500);
+        response.write('Something went wrong.');
+        response.end();
       });
-
-    lambdaInstance.addEventListenerOnce('close', () => {
-      if (!response.finished) response.end();
-      storage.destroy();
-    });
   }
 };
 

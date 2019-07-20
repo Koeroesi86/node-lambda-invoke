@@ -11,8 +11,10 @@ const port = process.env.PORT || '8080';
 
 const lambdaToInvoke = resolve(__dirname, './testLambda.js').replace(/\\/g, '/');
 const handlerKey = 'handler';
+const storageDriver = resolve(__dirname, '../classes/Storage').replace(/\\/g, '/');
+
 http
-  .createServer(createHttpMiddleware(lambdaToInvoke, handlerKey, console.log))
+  .createServer(createHttpMiddleware(lambdaToInvoke, handlerKey, console.log, storageDriver))
   .listen(
     {
       host: host,

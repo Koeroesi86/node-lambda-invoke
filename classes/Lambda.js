@@ -7,11 +7,13 @@ class Lambda {
    * @param {string} path
    * @param {string} handler
    * @param {function} [logger]
+   * @param {string} [storagePath]
    */
-  constructor(path, handler, logger = () => {}) {
+  constructor(path, handler, logger = () => {}, storagePath) {
     this._path = path;
     this._handler = handler;
     this._logger = logger;
+    this._storagePath = storagePath;
     this.createInstance();
     this.busy = false;
 
@@ -47,7 +49,7 @@ class Lambda {
         }
       }
     );
-    this.instance.postMessage(EVENT_STARTUP);
+    this.instance.postMessage({ type: EVENT_STARTUP, storagePath: this._storagePath });
   }
 
   /**
@@ -56,7 +58,8 @@ class Lambda {
    */
   invoke(requestId, callback = () => {}) {
     if (!this.instance) this.createInstance();
-    this.instance.addEventListenerOnce('message', reqId => {
+    this.busy = true;
+    this.instance.addEventListener('message', reqId => {
       if (reqId === requestId) {
         callback(reqId);
         this.busy = false;
