@@ -1,4 +1,4 @@
-# Node Lambda invoke
+# Node Lambda invoke [![Build status](https://api.travis-ci.org/Koeroesi86/node-lambda-invoke.svg?branch=master)](https://travis-ci.org/Koeroesi86/node-lambda-invoke)
 
 A library that can be easily used for AWS lambda functions locally
 
