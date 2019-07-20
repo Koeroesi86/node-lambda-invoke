@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "A local Lambda implementation",
   "main": "index.js",
+  "author": {
+    "name": "Krisztian Korosi",
+    "url": "https://github.com/Koeroesi86"
+  },
+  "repository": "github:Koeroesi86/node-lambda-invoke",
   "publishConfig": {
     "access": "public"
   },
@@ -11,7 +16,6 @@
     "generate-version": "node scripts/version.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
   "license": "MIT",
   "dependencies": {
     "dotenv": "^6.2.0",

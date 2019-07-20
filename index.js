@@ -1,5 +1,3 @@
-module.exports.example = require('./example/example');
-
 module.exports.httpMiddleware = require('./middlewares/http');
 
 module.exports.Lambda = require('./classes/Lambda');
