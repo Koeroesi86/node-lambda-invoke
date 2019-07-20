@@ -2,12 +2,10 @@ const uuid = require('uuid');
 const url = require('url');
 const rimraf = require('rimraf');
 const { resolve } = require('path');
-const Lambda = require('../classes/Lambda');
+const LambdaPool = require('../classes/LambdaPool');
 const RequestEvent = require('../classes/RequestEvent');
-const { EVENT_STARTED } = require('../constants');
-const stdoutListener = require('./stdoutListener');
 
-const lambdaInstances = {};
+let overallLimit = 3000;
 
 /**
  * @param {string} lambdaToInvoke
@@ -16,13 +14,18 @@ const lambdaInstances = {};
  * @param {string} storageDriverPath
  * @returns {Function}
  */
-const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}, storageDriverPath) => {
+const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}, storageDriverPath, limit) => {
   // TODO: tmp folders
   if (!storageDriverPath || typeof storageDriverPath !== "string") return (req, res, next) => { next() };
+
+  if (limit) {
+    overallLimit = limit;
+  }
 
   rimraf.sync(resolve(__dirname, '../requests/*'));
   rimraf.sync(resolve(__dirname, '../responses/*'));
   const StorageDriver = require(storageDriverPath);
+  const lambdaPool = new LambdaPool({ storageDriverPath, handlerKey, logger });
   return (request, response) => {
     const {
       query: queryStringParameters,
@@ -42,37 +45,16 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
     let lambdaInstance;
 
     logger('Invoking lambda', `${lambdaToInvoke}#${handlerKey}`);
+
+    const closeListener = () => {
+      if (!response.finished) response.end();
+      storage.destroy();
+    };
     Promise.resolve()
-      .then(() => new Promise(res => {
-        let currentId = Object.keys(lambdaInstances).find(id => !lambdaInstances[id].busy);
+      .then(() => lambdaPool.getLambda(lambdaToInvoke, handlerKey))
+      .then(instance => {
+        instance.addEventListenerOnce('close', closeListener);
 
-        if (currentId) {
-          res({ id: currentId, instance: lambdaInstances[currentId] });
-        } else {
-          currentId = uuid.v4();
-          const currentLambdaInstance = new Lambda(lambdaToInvoke, handlerKey, logger, storageDriverPath);
-
-          currentLambdaInstance.addEventListener('message', message => {
-            if (message.type === EVENT_STARTED) {
-              logger(`[${currentId}] started`);
-              res({ id: currentId, instance: currentLambdaInstance });
-            }
-          });
-
-          currentLambdaInstance.addEventListenerOnce('close', code => {
-            if (code) logger(`[${currentId}] Lambda exited with code ${code}`);
-            if (!response.finished) response.end();
-
-            lambdaInstances[currentId] = null;
-            delete lambdaInstances[currentId];
-            storage.destroy();
-          });
-
-          stdoutListener(currentLambdaInstance, logger);
-        }
-      }))
-      .then(({ id, instance }) => {
-        lambdaInstances[id] = instance;
         lambdaInstance = instance;
         return Promise.resolve();
       })
@@ -86,9 +68,12 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
           if (responseEvent.body) {
             const bufferEncoding = responseEvent.isBase64Encoded ? 'base64' : 'utf8';
             response.end(Buffer.from(responseEvent.body, bufferEncoding));
+          } else {
+            response.end();
           }
-          response.end();
         }
+
+        lambdaInstance.removeEventListener('close', closeListener);
         return storage.destroy();
       })
       .catch(err => {

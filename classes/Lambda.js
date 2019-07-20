@@ -19,8 +19,10 @@ class Lambda {
 
     const killTimer = setTimeout(() => {
       this._logger('Shutting down lambda.');
-        this.instance.terminate();
-        this.instance = null;
+        if (this.instance) {
+          this.instance.terminate();
+          this.instance = null;
+        }
     }, 15 * 60 * 1000);
 
     this.instance.addEventListener('close', code => {
@@ -28,6 +30,8 @@ class Lambda {
       this.instance = null;
       clearTimeout(killTimer);
     });
+
+    this.onFinished = this.onFinished.bind(this);
   }
 
   get stdout() {
@@ -59,13 +63,18 @@ class Lambda {
   invoke(requestId, callback = () => {}) {
     if (!this.instance) this.createInstance();
     this.busy = true;
-    this.instance.addEventListener('message', reqId => {
-      if (reqId === requestId) {
-        callback(reqId);
-        this.busy = false;
-      }
-    });
+    this._requestId = requestId;
+    this._callback = callback;
+    this.instance.addEventListener('message', this.onFinished);
     this.instance.postMessage(requestId);
+  }
+
+  onFinished(reqId) {
+    if (reqId === this._requestId) {
+      this.busy = false;
+      this._callback(reqId);
+      this.instance.removeEventListener('message', this.onFinished);
+    }
   }
 
   /**
