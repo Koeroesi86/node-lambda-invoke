@@ -9,7 +9,6 @@ script:
   - export NODE_ENV=production
   - export TRAVIS_TAG="$(git rev-parse --short ${TRAVIS_COMMIT})"
   - yarn generate-version
-  - yarn build
 deploy:
   provider: npm
   skip_cleanup: true
