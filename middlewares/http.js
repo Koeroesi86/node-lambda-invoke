@@ -2,6 +2,7 @@ const uuid = require('uuid');
 const url = require('url');
 const rimraf = require('rimraf');
 const { resolve } = require('path');
+const { writeFileSync } = require('fs');
 const Lambda = require('../classes/Lambda');
 const RequestEvent = require('../classes/RequestEvent');
 const Storage = require('../classes/Storage');
@@ -19,7 +20,9 @@ const lambdaInstances = {};
 const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}, storageDriver) => {
   // TODO: tmp folders
   rimraf.sync(resolve(__dirname, '../requests/*'));
+  writeFileSync(resolve(__dirname, '../requests/.gitkeep'), '', 'utf8');
   rimraf.sync(resolve(__dirname, '../responses/*'));
+  writeFileSync(resolve(__dirname, '../responses/.gitkeep'), '', 'utf8');
   const storageDriverClass = storageDriver || Storage;
   return (request, response) => {
     const {
