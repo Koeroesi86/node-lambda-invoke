@@ -6,32 +6,41 @@ class Lambda {
   /**
    * @param {string} path
    * @param {string} handler
+   * @param {function} [logger]
    */
-  constructor(path, handler) {
+  constructor(path, handler, logger = () => {}) {
     this._path = path;
     this._handler = handler;
+    this._logger = logger;
     this.createInstance();
     this.busy = false;
 
     const killTimer = setTimeout(() => {
-      console.log('Shutting down lambda.');
+      this._logger('Shutting down lambda.');
         this.instance.terminate();
         this.instance = null;
     }, 15 * 60 * 1000);
 
     this.instance.addEventListener('close', code => {
-      if (code) {
-        console.log(`Lambda exited with code ${code}`);
-      }
+      if (code) this._logger(`Lambda exited with code ${code}`);
       this.instance = null;
       clearTimeout(killTimer);
     });
+  }
+
+  get stdout() {
+    return this.instance.stdout;
+  }
+
+  get stderr() {
+    return this.instance.stderr;
   }
 
   createInstance() {
     this.instance = new Worker(
       resolve(__dirname, '../middlewares/invoke.js'),
       {
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         env: {
           LAMBDA: this._path,
           HANDLER: this._handler,

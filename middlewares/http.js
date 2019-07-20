@@ -5,13 +5,22 @@ const { resolve } = require('path');
 const Lambda = require('../classes/Lambda');
 const RequestEvent = require('../classes/RequestEvent');
 const Storage = require('../classes/Storage');
+const stdoutListener = require('./stdoutListener');
 
 const lambdaInstances = {};
 
-const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}) => {
+/**
+ * @param {string} lambdaToInvoke
+ * @param {string} handlerKey
+ * @param {function} [logger]
+ * @param {Storage} [storageDriver]
+ * @returns {Function}
+ */
+const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = () => {}, storageDriver) => {
   // TODO: tmp folders
   rimraf.sync(resolve(__dirname, '../requests/*'));
   rimraf.sync(resolve(__dirname, '../responses/*'));
+  const storageDriverClass = storageDriver || Storage;
   return (request, response) => {
     const {
       query: queryStringParameters,
@@ -26,7 +35,7 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
     event.headers = request.headers;
 
     const requestId = uuid.v4();
-    const storage = new Storage(requestId);
+    const storage = new storageDriverClass(requestId);
 
     let lambdaInstance;
     let currentId = Object.keys(lambdaInstances).find(id => !lambdaInstances[id].busy);
@@ -47,6 +56,8 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
         delete lambdaInstances[currentId];
         storage.destroy();
       });
+
+      stdoutListener(lambdaInstance, logger);
     }
 
     storage.setRequest(event)
@@ -54,12 +65,12 @@ const createHttpMiddleware = (lambdaToInvoke, handlerKey = 'handler', logger = (
       .then(() => storage.getResponse()))
       /** @var {ResponseEvent} responseEvent */
       .then(responseEvent => {
-        storage.destroy();
         if (responseEvent.statusCode) {
           response.writeHead(responseEvent.statusCode, responseEvent.headers);
           if (responseEvent.body) response.write(responseEvent.body);
           response.end();
         }
+        return storage.destroy();
       });
 
     lambdaInstance.addEventListenerOnce('close', () => {

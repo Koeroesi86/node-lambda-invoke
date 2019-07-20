@@ -5,7 +5,7 @@ const Driver = require('./FileDriver');
 class Storage {
   /**
    * @param {string} id
-   * @param {Driver} driver
+   * @param {Driver} [driver]
    */
   constructor(id, driver)  {
     this.id = id;

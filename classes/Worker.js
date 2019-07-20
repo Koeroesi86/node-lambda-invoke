@@ -40,6 +40,14 @@ class Worker {
     this.addEventListener('error', onerror);
   }
 
+  get stdout() {
+    return this.instance.stdout;
+  }
+
+  get stderr() {
+    return this.instance.stderr;
+  }
+
   addEventListener(event, listener) {
     if (this.instance) this.instance.on(event, listener);
   }
