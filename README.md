@@ -22,15 +22,14 @@ npm i --save @koeroesi86/node-lambda-invoke
 
 ```javascript
 const http = require('http');
-const { resolve } = require('path');
 const { httpMiddleware } = require('@koeroesi86/node-lambda-invoke');
 
 const host = 'localhost';
 const port = 8080;
 
-const lambdaToInvoke = resolve(__dirname, './testLambda.js').replace(/\\/g, '/');
+const lambdaToInvoke = './pathOfLambda.js';
 const handlerKey = 'handler';
-const storageDriver = resolve(__dirname, '../classes/Storage').replace(/\\/g, '/');
+const storageDriver = './pathOfStorage.js';
 
 http
   .createServer(httpMiddleware(lambdaToInvoke, handlerKey, console.log, storageDriver))
@@ -43,7 +42,9 @@ http
 
 ## Running locally
 
-    yarn start
+```bash
+yarn start
+```
 
 ## Configuration
 
