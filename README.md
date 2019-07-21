@@ -27,12 +27,22 @@ const { httpMiddleware } = require('@koeroesi86/node-lambda-invoke');
 const host = 'localhost';
 const port = 8080;
 
-const lambdaToInvoke = './pathOfLambda.js';
+const lambdaPath = './pathOfLambda.js';
 const handlerKey = 'handler';
-const storageDriver = './pathOfStorage.js';
+const logger = console.log;
+const limit = 100; // overall limit ox running lambdas
 
 http
-  .createServer(httpMiddleware(lambdaToInvoke, handlerKey, console.log, storageDriver))
+  .createServer(httpMiddleware({
+    lambdaPath,
+    handlerKey,
+    logger,
+    limit,
+    communication: {
+      // file|ipc|custom --- When 'custom' used, path is needed
+      type: 'ipc',
+    }
+  }))
   .listen(
     { host, port, exclusive: true },
     () => console.log(`Server running on http://${host}:${port}`)

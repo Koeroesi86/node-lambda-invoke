@@ -13,7 +13,7 @@ class Worker {
       this.workerPath,
       [],
       {
-        // silent: true,
+        silent: true,
         // detached: true,
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         cwd: dirname(this.workerPath),
@@ -25,11 +25,16 @@ class Worker {
     };
     this.instance.stdout.off('data', messageListener);
     this.instance.stdout.on('data', messageListener);
+    this.instance.once('close', () => {
+      this.instance = null;
+      delete this.instance;
+    });
 
     this.addEventListener = this.addEventListener.bind(this);
     this.removeEventListener = this.removeEventListener.bind(this);
     this.terminate = this.terminate.bind(this);
     this.postMessage = this.postMessage.bind(this);
+    this.send = this.send.bind(this);
   }
 
   set onmessage(onmessage) {
@@ -56,6 +61,18 @@ class Worker {
     if (this.instance) this.instance.once(event, listener);
   }
 
+  on(event, listener) {
+    this.addEventListener(event, listener);
+  }
+
+  off(event, listener) {
+    this.removeEventListener(event, listener);
+  }
+
+  send(message, cb = () => {}) {
+    this.postMessage(message, cb);
+  }
+
   removeEventListener(event, listener) {
     if (this.instance) this.instance.off(event, listener);
   }
@@ -69,8 +86,8 @@ class Worker {
     if (this.instance) this.instance.kill('SIGINT');
   }
 
-  postMessage(message) {
-    if (this.instance) this.instance.send(message);
+  postMessage(message, cb = () => {}) {
+    if (this.instance) this.instance.send(message, cb);
   }
 }
 

@@ -1,48 +1,46 @@
 const ResponseEvent = require('../classes/ResponseEvent');
-const { EVENT_STARTUP, EVENT_STARTED } = require('../constants');
+const {
+  EVENT_STARTED,
+  EVENT_REQUEST,
+  EVENT_RESPONSE,
+} = require('../constants');
 
 const {
   LAMBDA = './testLambda.js',
-  HANDLER = 'handler'
+  HANDLER = 'handler',
+  STORAGE = '',
 } = process.env;
 
 const lambdaHandler = require(LAMBDA)[HANDLER];
-
-let storagePath;
+const Storage = require(STORAGE);
 
 setTimeout(() => {
   process.exit(0);
 }, 15 * 60 * 1000); // setting to default 15 minutes AWS timeout 15 * 60 * 1000
 
-process.on('message', requestId => {
-  if (requestId && requestId.type === EVENT_STARTUP) {
-    if (requestId.storagePath) {
-      storagePath = requestId.storagePath;
-    }
+process.on('message', event => {
+  if (event.type === EVENT_REQUEST) {
+    const storage = new Storage(event.id, process);
 
-    process.send({ type: EVENT_STARTED });
-    return;
+    Promise.resolve()
+      .then(() => storage.getRequest())
+      .then(requestEvent => new Promise(resolve => {
+        lambdaHandler(requestEvent, {}, (error, response = {}) => {
+          const responseEvent = new ResponseEvent;
+
+          if (error) {
+            responseEvent.statusCode = 500;
+            responseEvent.body = error.body || error + '';
+          } else {
+            Object.assign(responseEvent, response);
+          }
+
+          resolve(responseEvent);
+        });
+      }))
+      .then(responseEvent => storage.setResponse(responseEvent))
+      .then(() => process.send({ type: EVENT_RESPONSE, id: event.id }));
   }
-
-  const Storage = require(storagePath);
-  const storage = new Storage(requestId);
-
-  Promise.resolve()
-    .then(() => storage.getRequest())
-    .then(message => new Promise(resolve => {
-      lambdaHandler(message, {}, (error, response = {}) => {
-        const responseEvent = new ResponseEvent;
-
-        if (error) {
-          responseEvent.statusCode = 500;
-          responseEvent.body = error.body || error + '';
-        } else {
-          Object.assign(responseEvent, response);
-        }
-
-        resolve(responseEvent);
-      });
-    }))
-    .then(responseEvent => storage.setResponse(responseEvent))
-    .then(() => process.send(requestId));
 });
+
+process.send({ type: EVENT_STARTED });

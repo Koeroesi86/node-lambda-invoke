@@ -1,6 +1,9 @@
 const { resolve } = require('path');
 const Worker = require('./Worker');
-const { EVENT_STARTUP } = require('../constants');
+const {
+  EVENT_REQUEST,
+  EVENT_RESPONSE,
+} = require('../constants');
 
 class Lambda {
   /**
@@ -14,6 +17,7 @@ class Lambda {
     this._handler = handler;
     this._logger = logger;
     this._storagePath = storagePath;
+    this.StorageDriver = require(storagePath);
     this.createInstance();
     this.busy = false;
 
@@ -50,29 +54,35 @@ class Lambda {
         env: {
           LAMBDA: this._path,
           HANDLER: this._handler,
+          STORAGE: this._storagePath,
         }
       }
     );
-    this.instance.postMessage({ type: EVENT_STARTUP, storagePath: this._storagePath });
   }
 
   /**
    * @param {string} requestId
+   * @param {RequestEvent} requestEvent
    * @param {function} callback
    */
-  invoke(requestId, callback = () => {}) {
+  invoke(requestId, requestEvent, callback = () => {}) {
     if (!this.instance) this.createInstance();
-    this.busy = true;
-    this._requestId = requestId;
-    this._callback = callback;
-    this.instance.addEventListener('message', this.onFinished);
-    this.instance.postMessage(requestId);
+    this._storage = new this.StorageDriver(requestId, this.instance);
+    Promise.resolve()
+      .then(() => this._storage.setRequest(requestEvent))
+      .then(() => {
+        this.busy = true;
+        this._requestId = requestId;
+        this._callback = callback;
+        this.instance.addEventListener('message', this.onFinished);
+        this.instance.postMessage({ type: EVENT_REQUEST, id: requestId });
+      });
   }
 
-  onFinished(reqId) {
-    if (reqId === this._requestId) {
+  onFinished(event) {
+    if (event.type === EVENT_RESPONSE && event.id === this._requestId) {
       this.busy = false;
-      this._callback(reqId);
+      this._storage.getResponse().then(responseEvent => this._callback(responseEvent));
       this.instance.removeEventListener('message', this.onFinished);
     }
   }
@@ -99,6 +109,10 @@ class Lambda {
    */
   removeEventListener(event, listener) {
     this.instance.removeEventListener(event, listener);
+  }
+
+  postMessage(message, cb = () => {}) {
+    this.instance.postMessage(message, cb);
   }
 }
 

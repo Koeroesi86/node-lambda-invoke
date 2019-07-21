@@ -49,7 +49,7 @@ class LambdaPool {
       const nonBusyId = getNonBusyId(lambdaToInvoke);
       if (getOverallCount() >= this.overallLimit) {
         return Promise.resolve()
-          .then(() => new Promise(r => setTimeout(r, 2000)))
+          .then(() => new Promise(r => setTimeout(r, 100)))
           .then(() => this.getLambda(lambdaToInvoke, handlerKey));
       } else if (!lambdaInstances[lambdaToInvoke] || !nonBusyId) {
         return Promise.resolve()
