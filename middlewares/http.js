@@ -1,19 +1,10 @@
 const uuid = require('uuid');
 const url = require('url');
-const { resolve } = require('path');
 const LambdaPool = require('../classes/LambdaPool');
 const RequestEvent = require('../classes/RequestEvent');
+const CommunicationRegistry = require('../registry/communication');
 
 let overallLimit = 3000;
-
-const communicationTypes = {
-  ipc: {
-    path: resolve(__dirname, '../classes/IPCStorage'),
-  },
-  file: {
-    path: resolve(__dirname, '../classes/FileStorage')
-  }
-};
 
 /**
  * @typedef Communication
@@ -25,16 +16,16 @@ const communicationTypes = {
  * @typedef Options
  * @property {string} lambdaPath
  * @property {string} handlerKey
- * @property {function} logger
- * @property {number} limit
- * @property {Communication} communication
+ * @property {function} [logger]
+ * @property {number} [limit]
+ * @property {Communication} [communication]
  */
 
 /**
  * @param {Options} options
  * @returns {Function}
  */
-const createHttpMiddleware = (options = {}) => {
+function createHttpMiddleware(options) {
   const {
     lambdaPath,
     handlerKey = 'handler',
@@ -42,10 +33,12 @@ const createHttpMiddleware = (options = {}) => {
     limit = overallLimit,
     communication = {},
   } = options;
+  const currentCommunication = {
+    ...(!communication.type ? { type: 'ipc' } : communication),
+  };
   const communicationConfig = {
-    ...(communicationTypes[communication.type] && communicationTypes[communication.type]),
-    ...(!communicationTypes[communication.type] && communication),
-    ...(!communication.type && communicationTypes.ipc),
+    ...(CommunicationRegistry[currentCommunication.type] && CommunicationRegistry[currentCommunication.type].js),
+    ...(!CommunicationRegistry[currentCommunication.type] && currentCommunication),
   };
   // TODO: tmp folders
   if (!communicationConfig.path || typeof communicationConfig.path !== "string") return (req, res, next) => { next() };
@@ -56,7 +49,7 @@ const createHttpMiddleware = (options = {}) => {
 
   const StorageDriver = require(communicationConfig.path);
   if (StorageDriver.start) StorageDriver.start();
-  const lambdaPool = new LambdaPool({ storageDriverPath: communicationConfig.path, handlerKey, logger, communication });
+  const lambdaPool = new LambdaPool({ logger, communication: currentCommunication });
   return (request, response) => {
     const {
       query: queryStringParameters,
@@ -113,6 +106,6 @@ const createHttpMiddleware = (options = {}) => {
         response.end();
       });
   }
-};
+}
 
 module.exports = createHttpMiddleware;

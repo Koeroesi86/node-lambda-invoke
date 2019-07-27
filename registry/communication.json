@@ -1,0 +1,12 @@
+{
+  "ipc": {
+    "js": {
+      "path": "../classes/IPCStorage"
+    }
+  },
+  "file": {
+    "js": {
+      "path": "../classes/FileStorage"
+    }
+  }
+}

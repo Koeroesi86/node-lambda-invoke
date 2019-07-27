@@ -4,20 +4,22 @@ const {
   EVENT_REQUEST,
   EVENT_RESPONSE,
 } = require('../constants');
+const CommunicationRegistry = require('../registry/communication');
 
 class Lambda {
   /**
    * @param {string} path
    * @param {string} handler
    * @param {function} [logger]
-   * @param {string} [storagePath]
+   * @param {Object} communication
    */
-  constructor(path, handler, logger = () => {}, storagePath) {
+  constructor(path, handler, logger = () => {}, communication) {
     this._path = path;
     this._handler = handler;
     this._logger = logger;
-    this._storagePath = storagePath;
-    this.StorageDriver = require(storagePath);
+    this._storagePath = CommunicationRegistry[communication.type].js.path;
+    this._communication = communication;
+    this.StorageDriver = require(this._storagePath);
     this.createInstance();
     this.busy = false;
 
@@ -29,13 +31,12 @@ class Lambda {
         }
     }, 15 * 60 * 1000);
 
-    this.instance.addEventListener('close', code => {
-      if (code) this._logger(`Lambda exited with code ${code}`);
+    this.instance.addEventListenerOnce('close', code => {
       this.instance = null;
       clearTimeout(killTimer);
     });
 
-    this.onFinished = this.onFinished.bind(this);
+    this._onFinished = this._onFinished.bind(this);
   }
 
   get stdout() {
@@ -54,7 +55,7 @@ class Lambda {
         env: {
           LAMBDA: this._path,
           HANDLER: this._handler,
-          STORAGE: this._storagePath,
+          COMMUNICATION: JSON.stringify(this._communication),
         }
       }
     );
@@ -74,16 +75,20 @@ class Lambda {
         this.busy = true;
         this._requestId = requestId;
         this._callback = callback;
-        this.instance.addEventListener('message', this.onFinished);
+        this.instance.addEventListener('message', this._onFinished);
         this.instance.postMessage({ type: EVENT_REQUEST, id: requestId });
       });
   }
 
-  onFinished(event) {
+  /**
+   * @param event
+   * @private
+   */
+  _onFinished(event) {
     if (event.type === EVENT_RESPONSE && event.id === this._requestId) {
       this.busy = false;
+      this.instance.removeEventListener('message', this._onFinished);
       this._storage.getResponse().then(responseEvent => this._callback(responseEvent));
-      this.instance.removeEventListener('message', this.onFinished);
     }
   }
 

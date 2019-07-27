@@ -11,7 +11,6 @@ const port = process.env.PORT || '8080';
 
 const lambdaPath = resolve(__dirname, './testLambda.js').replace(/\\/g, '/');
 const handlerKey = 'handler';
-// const storageDriver = resolve(__dirname, '../classes/FileStorage').replace(/\\/g, '/');
 const logger = (...args) => console.log(`[${new Date().toLocaleString()}]`, ...args);
 
 http
@@ -21,12 +20,8 @@ http
       handlerKey,
       logger,
       // communication: {
-      //   type: 'custom',
-      //   path: storageDriver
+      //   type: 'ipc', // file|ipc default: ipc
       // },
-      communication: {
-        type: 'ipc', // file|ipc
-      },
     })
   )
   .listen(

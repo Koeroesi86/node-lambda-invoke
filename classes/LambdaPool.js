@@ -3,19 +3,23 @@ const Lambda = require('../classes/Lambda');
 const stdoutListener = require('../middlewares/stdoutListener');
 const { EVENT_STARTED } = require('../constants');
 
-let lambdaInstances = {};
+const lambdaInstances = {};
 
 function getOverallCount() {
   return Object.keys(lambdaInstances).reduce((result, current) => Object.keys(lambdaInstances[current]).length + result, 0);
 }
 
 function getNonBusyId(lambdaToInvoke) {
-  return Object.keys(lambdaInstances[lambdaToInvoke] || {}).find(id => !lambdaInstances[lambdaToInvoke][id].busy);
+  const timeLimit = Date.now() - 15 * 60 * 1000 + 5000; // lifespan of lambda, to give enough time to respond before killed
+  return Object.keys(lambdaInstances[lambdaToInvoke] || {}).find(id => {
+    const instance = lambdaInstances[lambdaToInvoke][id];
+    return !instance.busy && instance.createdAt >= timeLimit;
+  });
 }
 
 class LambdaPool {
-  constructor({ storageDriverPath, overallLimit, logger = () => {} }) {
-    this.storageDriver = storageDriverPath;
+  constructor({ overallLimit, logger = () => {}, communication }) {
+    this.communication = communication;
     this.overallLimit = overallLimit;
     this.logger = logger;
 
@@ -26,7 +30,7 @@ class LambdaPool {
   createLambda(lambdaToInvoke, handlerKey) {
     return new Promise(resolve => {
       const currentId = uuid.v4();
-      const currentLambdaInstance = new Lambda(lambdaToInvoke, handlerKey, this.logger, this.storageDriver);
+      const currentLambdaInstance = new Lambda(lambdaToInvoke, handlerKey, this.logger, this.communication);
 
       const lambdaStartListener = message => {
         if (message.type === EVENT_STARTED) {
@@ -55,6 +59,7 @@ class LambdaPool {
         return Promise.resolve()
           .then(() => this.createLambda(lambdaToInvoke, handlerKey))
           .then(({ id, instance }) => {
+            instance.createdAt = Date.now();
             lambdaInstances[lambdaToInvoke] = {
               ...(lambdaInstances[lambdaToInvoke] && lambdaInstances[lambdaToInvoke]),
               [id]: instance,

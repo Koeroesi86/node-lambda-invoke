@@ -4,21 +4,23 @@ const {
   EVENT_REQUEST,
   EVENT_RESPONSE,
 } = require('../constants');
+const CommunicationRegistry = require('../registry/communication');
 
 const {
   LAMBDA = './testLambda.js',
   HANDLER = 'handler',
-  STORAGE = '',
+  COMMUNICATION = '{}',
 } = process.env;
 
 const lambdaHandler = require(LAMBDA)[HANDLER];
-const Storage = require(STORAGE);
+const Communication = JSON.parse(COMMUNICATION);
+const Storage = require(CommunicationRegistry[Communication.type].js.path);
 
 setTimeout(() => {
   process.exit(0);
 }, 15 * 60 * 1000); // setting to default 15 minutes AWS timeout 15 * 60 * 1000
 
-process.on('message', event => {
+function messageListener(event) {
   if (event.type === EVENT_REQUEST) {
     const storage = new Storage(event.id, process);
 
@@ -41,6 +43,8 @@ process.on('message', event => {
       .then(responseEvent => storage.setResponse(responseEvent))
       .then(() => process.send({ type: EVENT_RESPONSE, id: event.id }));
   }
-});
+}
+
+process.on('message', messageListener);
 
 process.send({ type: EVENT_STARTED });
