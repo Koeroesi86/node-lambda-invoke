@@ -51,7 +51,7 @@ class Lambda {
     this.instance = new Worker(
       resolve(__dirname, '../middlewares/invoke.js'),
       {
-        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        // stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         env: {
           LAMBDA: this._path,
           HANDLER: this._handler,

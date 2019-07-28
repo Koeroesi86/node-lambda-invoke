@@ -6,3 +6,5 @@ requests/*
 !requests/.gitkeep
 responses/*
 !responses/.gitkeep
+pipes/*
+!pipes/.gitkeep

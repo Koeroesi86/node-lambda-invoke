@@ -10,6 +10,7 @@ script:
   - export TRAVIS_TAG="$(git rev-parse --short ${TRAVIS_COMMIT})"
   - yarn generate-version
 deploy:
+  branch: master
   provider: npm
   skip_cleanup: true
   email: $NPM_EMAIL

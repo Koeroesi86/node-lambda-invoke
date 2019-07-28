@@ -1,5 +1,18 @@
-const { dirname } = require('path');
-const { fork } = require('child_process');
+const fs = require('fs');
+const { dirname, resolve } = require('path');
+const { fork, spawn } = require('child_process');
+// const uuid = require('uuid');
+// const rimraf = require('rimraf');
+
+const getExecutor = workerPath => {
+  const res = (workerPath || '').match(/\.(.+)$/);
+  switch (res[1]) {
+    case 'php':
+      return 'php';
+    case 'js':
+    default: return 'node';
+  }
+};
 
 // TODO: move this to separate package
 class Worker {
@@ -8,16 +21,39 @@ class Worker {
    * @param {Object} options
    */
   constructor(workerPath, options = {}) {
-    this.workerPath = workerPath.replace(/\\/, '/');
-    this.instance = fork(
-      this.workerPath,
-      [],
+    this.workerPath = workerPath.replace(/\\/g, '/');
+    this.pipePrefix = resolve(__dirname, `../pipes/test`).replace(/\\/g, '/');
+    this.invokerPipePath = `${this.pipePrefix}-invoker`;
+    this.executorPipePath = `${this.pipePrefix}-executor`;
+
+    this.addEventListener = this.addEventListener.bind(this);
+    this.removeEventListener = this.removeEventListener.bind(this);
+    this.terminate = this.terminate.bind(this);
+    this.postMessage = this.postMessage.bind(this);
+    this.send = this.send.bind(this);
+    this._onExecutorMessage = this._onExecutorMessage.bind(this);
+
+    console.log('this.invokerPipePath', this.invokerPipePath)
+
+    // change to named pipe!
+    fs.writeFileSync(this.invokerPipePath, '\n', 'utf8');
+    fs.writeFileSync(this.executorPipePath, '\n', 'utf8');
+
+    this.instance = spawn(
+      getExecutor(this.workerPath),
+      [
+        this.workerPath
+      ],
       {
-        silent: true,
+        // silent: true,
         // detached: true,
-        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        // stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         cwd: dirname(this.workerPath),
         ...options,
+        env: {
+          ...options.env,
+          EXECUTOR_PIPE: this.executorPipePath
+        }
       }
     );
     const messageListener = data => {
@@ -30,11 +66,17 @@ class Worker {
       delete this.instance;
     });
 
-    this.addEventListener = this.addEventListener.bind(this);
-    this.removeEventListener = this.removeEventListener.bind(this);
-    this.terminate = this.terminate.bind(this);
-    this.postMessage = this.postMessage.bind(this);
-    this.send = this.send.bind(this);
+    // this.executorPipe = fs.createWriteStream(this.executorPipePath, { flags: 'w', autoClose: false });
+    // this.readableStream = fs.createReadStream(this.executorPipePath, { encoding: 'utf8', autoClose: false });
+    // this.readableStream.on('data', this._onExecutorMessage);
+    // until fifo added
+    fs.watchFile(this.executorPipePath, { interval: 1 },e => {
+      this._onExecutorMessage(fs.readFileSync(this.executorPipePath, 'utf8'))
+    });
+  }
+
+  _onExecutorMessage(chunk) {
+    console.log('>>>DATA', chunk.toString().trim())
   }
 
   set onmessage(onmessage) {
