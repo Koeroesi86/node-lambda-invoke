@@ -1,5 +1,5 @@
 const { dirname } = require('path');
-const { fork } = require('child_process');
+const { fork, spawn } = require('child_process');
 
 // TODO: move this to separate package
 class Worker {
@@ -9,7 +9,7 @@ class Worker {
    */
   constructor(workerPath, options = {}) {
     this.workerPath = workerPath.replace(/\\/, '/');
-    this.instance = fork(
+    this.instance = spawn(
       this.workerPath,
       [],
       {

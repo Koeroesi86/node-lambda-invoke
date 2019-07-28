@@ -49,9 +49,11 @@ class Lambda {
 
   createInstance() {
     this.instance = new Worker(
-      resolve(__dirname, '../middlewares/invoke.js'),
+      // resolve(__dirname, '../middlewares/invoke.js'),
+      'php ' + resolve(__dirname, '../middlewares/invoke.php').replace(/\\/g, '/'),
       {
-        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        // stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        shell: true,
         env: {
           LAMBDA: this._path,
           HANDLER: this._handler,
