@@ -1,8 +1,9 @@
-const fs = require('fs');
 const { dirname, resolve } = require('path');
-const { fork, spawn } = require('child_process');
-// const uuid = require('uuid');
+const { spawn } = require('child_process');
+const uuid = require('uuid');
 // const rimraf = require('rimraf');
+const net = require('net');
+const { EOL } = require('os');
 
 const getExecutor = workerPath => {
   const res = (workerPath || '').match(/\.(.+)$/);
@@ -22,9 +23,9 @@ class Worker {
    */
   constructor(workerPath, options = {}) {
     this.workerPath = workerPath.replace(/\\/g, '/');
-    this.pipePrefix = resolve(__dirname, `../pipes/test`).replace(/\\/g, '/');
-    this.invokerPipePath = `${this.pipePrefix}-invoker`;
-    this.executorPipePath = `${this.pipePrefix}-executor`;
+    this.id = uuid.v4();
+    this.executorPipePath = `\\\\?\\pipe\\executor-${this.id}`;
+    this.invokerPipePath = `\\\\?\\pipe\\invoker-${this.id}`;
 
     this.addEventListener = this.addEventListener.bind(this);
     this.removeEventListener = this.removeEventListener.bind(this);
@@ -32,12 +33,7 @@ class Worker {
     this.postMessage = this.postMessage.bind(this);
     this.send = this.send.bind(this);
     this._onExecutorMessage = this._onExecutorMessage.bind(this);
-
-    console.log('this.invokerPipePath', this.invokerPipePath)
-
-    // change to named pipe!
-    fs.writeFileSync(this.invokerPipePath, '\n', 'utf8');
-    fs.writeFileSync(this.executorPipePath, '\n', 'utf8');
+    this._messageListeners = [];
 
     this.instance = spawn(
       getExecutor(this.workerPath),
@@ -45,42 +41,41 @@ class Worker {
         this.workerPath
       ],
       {
-        // silent: true,
-        // detached: true,
-        // stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        // shell: true,
+        // stdio: 'pipe',
         cwd: dirname(this.workerPath),
         ...options,
         env: {
           ...options.env,
-          EXECUTOR_PIPE: this.executorPipePath
+          EXECUTOR_PIPE: this.executorPipePath,
+          INVOKER_PIPE: this.invokerPipePath,
         }
       }
     );
-    const messageListener = data => {
-      console.info(data.toString().trim());
-    };
-    this.instance.stdout.off('data', messageListener);
-    this.instance.stdout.on('data', messageListener);
     this.instance.once('close', () => {
       this.instance = null;
       delete this.instance;
     });
 
-    // this.executorPipe = fs.createWriteStream(this.executorPipePath, { flags: 'w', autoClose: false });
-    // this.readableStream = fs.createReadStream(this.executorPipePath, { encoding: 'utf8', autoClose: false });
-    // this.readableStream.on('data', this._onExecutorMessage);
-    // until fifo added
-    fs.watchFile(this.executorPipePath, { interval: 1 },e => {
-      this._onExecutorMessage(fs.readFileSync(this.executorPipePath, 'utf8'))
+    const server = net.createServer(stream => {
+      stream.on('data', this._onExecutorMessage);
+      stream.on('end', () => {
+        server.close();
+      });
     });
+
+    server.listen(this.executorPipePath);
   }
 
   _onExecutorMessage(chunk) {
-    console.log('>>>DATA', chunk.toString().trim())
+    let message = chunk.toString().trim();
+    const event = JSON.parse(message);
+
+    this.instance.emit('message', event);
   }
 
   set onmessage(onmessage) {
-    this.addEventListener('message', onmessage);
+    if (typeof onmessage === 'function') this._messageListeners.push(onmessage);
   }
 
   set onerror(onerror) {
@@ -128,8 +123,27 @@ class Worker {
     if (this.instance) this.instance.kill('SIGINT');
   }
 
+  _sendMessage(message, cb) {
+    if (this._isSending) {
+      setTimeout(() => this._sendMessage(message, cb), 1);
+      return;
+    }
+
+    this._isSending = true;
+    return this._invokerStream.write(JSON.stringify(message) + EOL, 'utf8', () => {
+      this._isSending = false;
+      cb();
+    });
+  }
+
   postMessage(message, cb = () => {}) {
-    if (this.instance) this.instance.send(message, cb);
+    if (!this._invokerStream) {
+      this._invokerStream = net.connect(this.invokerPipePath, () => {
+        this._sendMessage(message, cb);
+      });
+    } else {
+      this._sendMessage(message, cb);
+    }
   }
 }
 

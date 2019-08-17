@@ -51,7 +51,6 @@ class Lambda {
     this.instance = new Worker(
       resolve(__dirname, '../middlewares/invoke.js'),
       {
-        // stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         env: {
           LAMBDA: this._path,
           HANDLER: this._handler,
@@ -87,7 +86,7 @@ class Lambda {
   _onFinished(event) {
     if (event.type === EVENT_RESPONSE && event.id === this._requestId) {
       this.busy = false;
-      this.instance.removeEventListener('message', this._onFinished);
+      if (this.instance) this.instance.removeEventListener('message', this._onFinished);
       this._storage.getResponse().then(responseEvent => this._callback(responseEvent));
     }
   }

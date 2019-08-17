@@ -9,7 +9,7 @@ const getDate = exports = () =>  moment().format('YYYY-MM-DD HH:mm:ss.SS');
  */
 module.exports = (lambdaInstance, logger = () => {}) => {
   const messageListener = data => {
-    logger(`[${getDate()}] ${data.toString().trim()}`);
+    logger(data.toString().trim());
   };
   lambdaInstance.stdout.off('data', messageListener);
   lambdaInstance.stdout.on('data', messageListener);

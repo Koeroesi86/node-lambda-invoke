@@ -1,4 +1,6 @@
 const fs = require('fs');
+const net = require('net');
+const { EOL } = require('os');
 const ResponseEvent = require('../classes/ResponseEvent');
 const {
   EVENT_STARTED,
@@ -12,30 +14,34 @@ const {
   HANDLER = 'handler',
   COMMUNICATION = '{}',
   EXECUTOR_PIPE = '',
+  INVOKER_PIPE = '',
 } = process.env;
+
+const stream = net.connect(EXECUTOR_PIPE);
+stream.setNoDelay(true);
+let sending = false;
+const sendMessage = (data, cb = () => {}) => {
+  // gets busy sometimes...
+  if (sending) {
+    // console.log('busy...')
+    return process.nextTick(() => {
+      sendMessage(data, cb);
+    });
+  }
+  sending = true;
+  // console.log('sending', JSON.stringify(data))
+  stream.write(JSON.stringify(data) + EOL, 'utf8', () => {
+    cb();
+
+    // console.log('sent', JSON.stringify(data))
+    sending = false;
+  });
+};
+process.send = sendMessage;
 
 const lambdaHandler = require(LAMBDA)[HANDLER];
 const Communication = JSON.parse(COMMUNICATION);
 const Storage = require(CommunicationRegistry[Communication.type].js.path);
-
-console.log('starting up...')
-// const writer = fs.createWriteStream(PIPE + '-executor', { flags: 'w', encoding: 'utf8', mode: 0o777, autoClose: false });
-const sendMessage = data => new Promise(resolve => {
-  fs.writeFile(EXECUTOR_PIPE, JSON.stringify(data), resolve)
-  // writer.write(JSON.stringify(data), resolve);
-});
-
-
-// setTimeout(() => {
-//   const readableStream = fs.createReadStream(PIPE + '-executor', { encoding: 'utf8', autoClose: false }); // fd
-//   readableStream.on('data', chunk => {
-//     console.log('Exec data >>>', chunk.toString().trim())
-//   });
-// }, 100);
-
-setInterval(() => {
-  sendMessage({ message: 'Hello there!' }).then(d => console.log('message sent'))
-}, 1000)
 
 setTimeout(() => {
   process.exit(0);
@@ -66,6 +72,17 @@ function messageListener(event) {
   }
 }
 
-// process.on('message', messageListener);
+process.on('message', messageListener);
 
-// process.send({ type: EVENT_STARTED });
+const server = net.createServer(stream => {
+  stream.on('data', c => {
+    process.emit('message', JSON.parse(c.toString().trim()));
+  });
+  stream.on('end', () => {
+    server.close();
+  });
+});
+
+server.listen(INVOKER_PIPE, () => {
+  process.send({ type: EVENT_STARTED });
+});

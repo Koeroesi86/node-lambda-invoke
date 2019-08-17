@@ -10,7 +10,7 @@ function getOverallCount() {
 }
 
 function getNonBusyId(lambdaToInvoke) {
-  const timeLimit = Date.now() - 15 * 60 * 1000 + 5000; // lifespan of lambda, to give enough time to respond before killed
+  const timeLimit = Date.now() - (15 * 60 * 1000) + 5000; // lifespan of lambda, to give enough time to respond before killed
   return Object.keys(lambdaInstances[lambdaToInvoke] || {}).find(id => {
     const instance = lambdaInstances[lambdaToInvoke][id];
     return !instance.busy && instance.createdAt >= timeLimit;
