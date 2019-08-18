@@ -49,7 +49,9 @@ class Lambda {
 
   createInstance() {
     this.instance = new Worker(
-      resolve(__dirname, '../middlewares/invoke.js'),
+      // resolve(__dirname, '../middlewares/invoke.js'),
+      // resolve(__dirname, '../middlewares/invoke.php'),
+      resolve(__dirname, '../middlewares/invoke.sh'),
       {
         env: {
           LAMBDA: this._path,

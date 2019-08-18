@@ -13,32 +13,9 @@ const {
   LAMBDA = './testLambda.js',
   HANDLER = 'handler',
   COMMUNICATION = '{}',
-  EXECUTOR_PIPE = '',
-  INVOKER_PIPE = '',
 } = process.env;
 
-const stream = net.connect(EXECUTOR_PIPE);
-stream.setNoDelay(true);
-let sending = false;
-const sendMessage = (data, cb = () => {}) => {
-  // gets busy sometimes...
-  if (sending) {
-    // console.log('busy...')
-    return process.nextTick(() => {
-      sendMessage(data, cb);
-    });
-  }
-  sending = true;
-  // console.log('sending', JSON.stringify(data))
-  stream.write(JSON.stringify(data) + EOL, 'utf8', () => {
-    cb();
-
-    // console.log('sent', JSON.stringify(data))
-    sending = false;
-  });
-};
-process.send = sendMessage;
-
+console.log('NODE_CHANNEL_FD', process.env.NODE_CHANNEL_FD)
 const lambdaHandler = require(LAMBDA)[HANDLER];
 const Communication = JSON.parse(COMMUNICATION);
 const Storage = require(CommunicationRegistry[Communication.type].js.path);
@@ -74,15 +51,4 @@ function messageListener(event) {
 
 process.on('message', messageListener);
 
-const server = net.createServer(stream => {
-  stream.on('data', c => {
-    process.emit('message', JSON.parse(c.toString().trim()));
-  });
-  stream.on('end', () => {
-    server.close();
-  });
-});
-
-server.listen(INVOKER_PIPE, () => {
-  process.send({ type: EVENT_STARTED });
-});
+process.send({ type: EVENT_STARTED });

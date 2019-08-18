@@ -1,13 +1,12 @@
-const { dirname, resolve } = require('path');
+const { dirname } = require('path');
 const { spawn } = require('child_process');
 const uuid = require('uuid');
-// const rimraf = require('rimraf');
-const net = require('net');
-const { EOL } = require('os');
 
 const getExecutor = workerPath => {
-  const res = (workerPath || '').match(/\.(.+)$/);
+  const res = (workerPath || '').match(/\.([a-zA-Z0-9\-]+)$/);
   switch (res[1]) {
+    case 'sh':
+      return 'sh';
     case 'php':
       return 'php';
     case 'js':
@@ -24,8 +23,6 @@ class Worker {
   constructor(workerPath, options = {}) {
     this.workerPath = workerPath.replace(/\\/g, '/');
     this.id = uuid.v4();
-    this.executorPipePath = `\\\\?\\pipe\\executor-${this.id}`;
-    this.invokerPipePath = `\\\\?\\pipe\\invoker-${this.id}`;
 
     this.addEventListener = this.addEventListener.bind(this);
     this.removeEventListener = this.removeEventListener.bind(this);
@@ -41,30 +38,15 @@ class Worker {
         this.workerPath
       ],
       {
-        // shell: true,
-        // stdio: 'pipe',
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         cwd: dirname(this.workerPath),
         ...options,
-        env: {
-          ...options.env,
-          EXECUTOR_PIPE: this.executorPipePath,
-          INVOKER_PIPE: this.invokerPipePath,
-        }
       }
     );
     this.instance.once('close', () => {
       this.instance = null;
       delete this.instance;
     });
-
-    const server = net.createServer(stream => {
-      stream.on('data', this._onExecutorMessage);
-      stream.on('end', () => {
-        server.close();
-      });
-    });
-
-    server.listen(this.executorPipePath);
   }
 
   _onExecutorMessage(chunk) {
@@ -123,27 +105,8 @@ class Worker {
     if (this.instance) this.instance.kill('SIGINT');
   }
 
-  _sendMessage(message, cb) {
-    if (this._isSending) {
-      setTimeout(() => this._sendMessage(message, cb), 1);
-      return;
-    }
-
-    this._isSending = true;
-    return this._invokerStream.write(JSON.stringify(message) + EOL, 'utf8', () => {
-      this._isSending = false;
-      cb();
-    });
-  }
-
   postMessage(message, cb = () => {}) {
-    if (!this._invokerStream) {
-      this._invokerStream = net.connect(this.invokerPipePath, () => {
-        this._sendMessage(message, cb);
-      });
-    } else {
-      this._sendMessage(message, cb);
-    }
+    this.instance.send(message, cb);
   }
 }
 
