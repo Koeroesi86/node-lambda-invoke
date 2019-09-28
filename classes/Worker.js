@@ -20,7 +20,7 @@ class Worker {
         ...options,
       }
     );
-    if (this.instance.stdout) {
+    if (this.instance.stdout && false) {
       const messageListener = data => {
         console.info(data.toString().trim());
       };
