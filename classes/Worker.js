@@ -20,11 +20,13 @@ class Worker {
         ...options,
       }
     );
-    const messageListener = data => {
-      console.info(data.toString().trim());
-    };
-    this.instance.stdout.off('data', messageListener);
-    this.instance.stdout.on('data', messageListener);
+    if (this.instance.stdout) {
+      const messageListener = data => {
+        console.info(data.toString().trim());
+      };
+      this.instance.stdout.off('data', messageListener);
+      this.instance.stdout.on('data', messageListener);
+    }
     this.instance.once('close', () => {
       this.instance = null;
       delete this.instance;
