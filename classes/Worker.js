@@ -1,5 +1,4 @@
-const { dirname } = require('path');
-const { fork } = require('child_process');
+const { spawn } = require('child_process');
 
 // TODO: move this to separate package
 class Worker {
@@ -8,23 +7,21 @@ class Worker {
    * @param {Object} options
    */
   constructor(workerPath, options = {}) {
-    this.workerPath = workerPath.replace(/\\/, '/');
-    this.instance = fork(
-      this.workerPath,
-      [],
+    this.workerPath = workerPath;
+    this.instance = spawn(
+      'node',
+      [
+        ...this.workerPath.split(' ')
+      ],
       {
-        silent: true,
-        // detached: true,
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-        cwd: dirname(this.workerPath),
         ...options,
       }
     );
-    if (this.instance.stdout && false) {
+    if (this.instance.stdout) {
       const messageListener = data => {
         console.info(data.toString().trim());
       };
-      this.instance.stdout.off('data', messageListener);
       this.instance.stdout.on('data', messageListener);
     }
     this.instance.once('close', () => {
