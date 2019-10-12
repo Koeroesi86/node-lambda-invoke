@@ -73,7 +73,7 @@ class Worker {
   }
 
   removeEventListener(event, listener) {
-    if (this.instance) this.instance.off(event, listener);
+    if (this.instance && this.instance.off) this.instance.off(event, listener);
   }
 
   // from EventTarget prototype, if needed
